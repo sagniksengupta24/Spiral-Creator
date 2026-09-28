@@ -1,38 +1,784 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://rawgit.com/hanumanum/js-turtle/master/lib/turtle.css">
-    <link rel="stylesheet" href="style.css">
-    <title>Spiral-Creator</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Spiral Studio | Generative Parametric Art</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07080d;
+      --surface: rgba(18, 20, 29, 0.72);
+      --surface-border: rgba(255, 255, 255, 0.08);
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.35);
+      --accent-gradient: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+      --text: #f3f4f6;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--text);
+    }
+
+    #viewport {
+      position: absolute;
+      inset: 0;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    #viewport:active {
+      cursor: grabbing;
+    }
+
+    /* Floating Studio HUD */
+    .studio-panel {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      width: 360px;
+      max-height: calc(100vh - 48px);
+      background: var(--surface);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      z-index: 10;
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+    }
+
+    .studio-panel.collapsed {
+      transform: translateX(-400px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .panel-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--surface-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 0.65rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 7px;
+      background: rgba(99, 102, 241, 0.18);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 12px;
+      color: #c7d2fe;
+      -webkit-text-fill-color: initial;
+    }
+
+    .panel-content {
+      padding: 20px 24px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.15) transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .control-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: #c7d2fe;
+    }
+
+    /* Form Controls */
+    select, input[type="range"] {
+      width: 100%;
+    }
+
+    select {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.85rem;
+      padding: 10px 12px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    select:hover, select:focus {
+      border-color: rgba(99, 102, 241, 0.5);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 10px var(--accent-glow);
+      cursor: pointer;
+      border: 2px solid var(--accent);
+      transition: transform 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    button {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--surface-border);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    button.primary {
+      background: var(--accent-gradient);
+      border: none;
+      color: #fff;
+      box-shadow: 0 4px 18px var(--accent-glow);
+    }
+
+    button.primary:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    /* Floating Action Buttons */
+    .floating-toggle {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--surface-border);
+      z-index: 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .stats-overlay {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.45);
+      background: rgba(0, 0, 0, 0.4);
+      padding: 8px 14px;
+      border-radius: 8px;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      pointer-events: none;
+      display: flex;
+      gap: 16px;
+    }
+
+    .palette-previews {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .palette-btn {
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .palette-btn.active {
+      border-color: #fff;
+      box-shadow: 0 0 10px rgba(255,255,255,0.4);
+    }
+
+    @media (max-width: 600px) {
+      .studio-panel {
+        width: calc(100vw - 32px);
+        left: 16px;
+        top: 16px;
+      }
+      .floating-toggle {
+        left: 16px;
+        top: 16px;
+      }
+      .stats-overlay {
+        display: none;
+      }
+    }
+  </style>
 </head>
 <body>
-    <canvas id="turtlecanvas" width="800" height="800"></canvas>
-    <canvas id="imagecanvas" width="800" height="800" style="display:none"></canvas>
-    <button onclick="go()">Start</button>
-    <div class="form__group field">
-        <input type="input" class="form__field" placeholder="Name" name="name" id='name' required />
-        <label for="name" class="form__label">No</label>
+
+  <canvas id="viewport"></canvas>
+
+  <div class="floating-toggle" id="btnTogglePanel" title="Toggle Controls">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </div>
+
+  <aside class="studio-panel" id="studioPanel">
+    <div class="panel-header">
+      <h1>Spiral Studio <span class="badge">v2.0</span></h1>
+      <button id="btnClosePanel" style="padding: 4px 8px; font-size: 0.75rem;">✕</button>
     </div>
 
-    <script  src="turtle.js"></script>
-    <script>
+    <div class="panel-content">
+      <div class="control-group">
+        <label class="control-label">Formula / Model</label>
+        <select id="selModel">
+          <option value="archimedean">Archimedean (Harmonic Growth)</option>
+          <option value="logarithmic">Logarithmic (Golden Spiral)</option>
+          <option value="fermat">Fermat / Phyllotaxis (Sunflowers)</option>
+          <option value="spirograph">Hypotrochoid (Spirograph)</option>
+          <option value="maurer">Maurer Rose (Geometric Star)</option>
+          <option value="clothoid">Harmonic Wave Spiral</option>
+        </select>
+      </div>
 
-        function go(){
-            var num = document.getElementById("name").value;
-            width(2)
-            color("#000000")
-            
-            for (var i=0; i<30; i++) {
-                forward(2+i);
-                left(40-i/num)
-            }
-            
+      <div class="control-group">
+        <div class="control-label"><span>Resolution / Points</span><span class="control-val" id="valPoints">1800</span></div>
+        <input type="range" id="paramPoints" min="100" max="6000" step="50" value="1800">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label"><span>Tightness / Scale</span><span class="control-val" id="valScale">2.4</span></div>
+        <input type="range" id="paramScale" min="0.2" max="10" step="0.1" value="2.4">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label"><span>Divergence / Ratio</span><span class="control-val" id="valDivergence">137.5°</span></div>
+        <input type="range" id="paramDivergence" min="0.1" max="360" step="0.05" value="137.5">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label"><span>Harmonic Modulation</span><span class="control-val" id="valHarmonics">3</span></div>
+        <input type="range" id="paramHarmonics" min="1" max="18" step="1" value="3">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label"><span>Stroke Thickness</span><span class="control-val" id="valWidth">1.5px</span></div>
+        <input type="range" id="paramWidth" min="0.2" max="6" step="0.1" value="1.5">
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">Color Symphony</label>
+        <div class="palette-previews" id="paletteGrid"></div>
+      </div>
+
+      <div class="btn-row">
+        <button id="btnAnimate" class="primary">
+          <span id="animIcon">▶</span> <span id="animLabel">Animate</span>
+        </button>
+        <button id="btnRandomize">🎲 Randomize</button>
+      </div>
+
+      <div class="btn-row">
+        <button id="btnResetCamera">🎯 Reset View</button>
+        <button id="btnPresetNautilus">🌀 Nautilus</button>
+      </div>
+
+      <div class="control-group" style="margin-top: 6px;">
+        <label class="control-label">High-Resolution Export</label>
+        <div class="btn-row">
+          <button id="btnExportPNG">4K Image (.PNG)</button>
+          <button id="btnExportSVG">Vector (.SVG)</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="stats-overlay">
+    <span>FPS: <strong id="statFPS">60</strong></span>
+    <span>Vertices: <strong id="statVertices">1800</strong></span>
+    <span>Pan/Zoom: Drag & Scroll</span>
+  </div>
+
+  <script>
+    /**
+     * Spiral Studio Parametric Engine
+     * Zero dependencies, HiDPI Retina canvas, Vector export
+     */
+    const canvas = document.getElementById('viewport');
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    // State Configuration
+    const state = {
+      model: 'fermat',
+      points: 2200,
+      scale: 2.2,
+      divergence: 137.508, // Golden ratio default
+      harmonics: 3,
+      strokeWidth: 1.4,
+      palette: 'aurora',
+      isAnimating: true,
+      time: 0,
+      animSpeed: 0.007,
+      // Camera Transform
+      panX: 0,
+      panY: 0,
+      zoom: 1,
+      isDragging: false,
+      lastMouseX: 0,
+      lastMouseY: 0
+    };
+
+    // Color Palettes (Multi-stop gradient interpolations)
+    const palettes = {
+      aurora: ['#00f2fe', '#4facfe', '#6b11ff', '#00f2fe'],
+      cyberpunk: ['#ff007f', '#7928ca', '#00f0ff', '#ff007f'],
+      sunfire: ['#ffe259', '#ffa751', '#ff2525', '#ffe259'],
+      emerald: ['#10b981', '#06b6d4', '#3b82f6', '#10b981'],
+      iridescent: ['#f43f5e', '#fbbf24', '#34d399', '#818cf8'],
+      monochrome: ['#ffffff', '#94a3b8', '#334155', '#ffffff']
+    };
+
+    // Setup High-DPI canvas
+    let dpr = window.devicePixelRatio || 1;
+    function resize() {
+      dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      if (!state.isAnimating) render();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Reset pan & zoom to center
+    function resetCamera() {
+      state.panX = 0;
+      state.panY = 0;
+      state.zoom = 1;
+      render();
+    }
+
+    // Mathematical Formula Coordinate Generators
+    function calculatePoints(count, timeOffset = 0) {
+      const coords = [];
+      const { model, scale, divergence, harmonics } = state;
+      const t = timeOffset;
+
+      for (let i = 0; i < count; i++) {
+        let x = 0, y = 0;
+
+        switch (model) {
+          case 'archimedean': {
+            const theta = (i * 0.08) + t;
+            const r = (scale * 2.5) * theta;
+            const wave = Math.sin(theta * harmonics + t) * (r * 0.15);
+            x = (r + wave) * Math.cos(theta);
+            y = (r + wave) * Math.sin(theta);
+            break;
+          }
+          case 'logarithmic': {
+            const theta = (i * 0.04) + t * 0.5;
+            const b = 0.14;
+            const r = Math.min(window.innerWidth, (scale * 1.5) * Math.exp(b * theta));
+            x = r * Math.cos(theta);
+            y = r * Math.sin(theta);
+            break;
+          }
+          case 'fermat': {
+            // Sunflower / Phyllotaxis Spiral
+            const angleRad = (divergence * (Math.PI / 180)) + Math.sin(t * 0.2) * 0.002;
+            const theta = i * angleRad;
+            const r = (scale * 8) * Math.sqrt(i) * (1 + 0.15 * Math.sin(i * 0.05 + t * 2));
+            x = r * Math.cos(theta);
+            y = r * Math.sin(theta);
+            break;
+          }
+          case 'spirograph': {
+            const theta = i * 0.05;
+            const R = 180 * (scale / 2);
+            const r = (harmonics * 14) + Math.cos(t) * 10;
+            const d = 90 + Math.sin(t * 1.5) * 40;
+            const k = (R - r) / r;
+            x = (R - r) * Math.cos(theta) + d * Math.cos(k * theta);
+            y = (R - r) * Math.sin(theta) - d * Math.sin(k * theta);
+            break;
+          }
+          case 'maurer': {
+            const theta = (i * (Math.PI / 180)) * 2;
+            const n = harmonics;
+            const d = divergence * 0.1;
+            const k = (i * d) * (Math.PI / 180);
+            const r = (scale * 120) * Math.sin(n * k + t);
+            x = r * Math.cos(k);
+            y = r * Math.sin(k);
+            break;
+          }
+          case 'clothoid': {
+            const theta = (i * 0.02) + t;
+            const r = (scale * 15) * Math.sqrt(i);
+            const modulation = Math.sin(theta * (harmonics / 2) + t) * 40;
+            x = (r + modulation) * Math.cos(theta * 1.3);
+            y = (r + modulation) * Math.sin(theta);
+            break;
+          }
         }
-        
-    </script>
+        coords.push({ x, y });
+      }
+      return coords;
+    }
+
+    // Dynamic Color Calculation
+    function getStrokeGradient(pts) {
+      const stops = palettes[state.palette];
+      const grad = ctx.createLinearGradient(-300, -300, 300, 300);
+      stops.forEach((c, idx) => grad.addColorStop(idx / (stops.length - 1), c));
+      return grad;
+    }
+
+    // Main Canvas Render Call
+    function render() {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#07080d';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Camera view matrix
+      const cx = (canvas.width / 2) + state.panX * dpr;
+      const cy = (canvas.height / 2) + state.panY * dpr;
+      ctx.translate(cx, cy);
+      ctx.scale(state.zoom * dpr, state.zoom * dpr);
+
+      const pts = calculatePoints(state.points, state.time);
+      if (pts.length < 2) {
+        ctx.restore();
+        return;
+      }
+
+      // Glow Bloom Layer
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      ctx.strokeStyle = getStrokeGradient(pts);
+      ctx.lineWidth = state.strokeWidth * 2.5;
+      ctx.shadowColor = palettes[state.palette][0];
+      ctx.shadowBlur = 18;
+      ctx.globalAlpha = 0.45;
+      ctx.stroke();
+      ctx.restore();
+
+      // Sharp Core Curve Layer
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      ctx.strokeStyle = getStrokeGradient(pts);
+      ctx.lineWidth = state.strokeWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = 0.95;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // 60FPS Animation Loop
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fpsTimer = 0;
+
+    function loop(currentTime) {
+      const delta = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
+
+      // Track FPS
+      frameCount++;
+      fpsTimer += delta;
+      if (fpsTimer >= 0.5) {
+        document.getElementById('statFPS').textContent = Math.round(frameCount / fpsTimer);
+        frameCount = 0;
+        fpsTimer = 0;
+      }
+
+      if (state.isAnimating) {
+        state.time += state.animSpeed;
+        render();
+      }
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // Interactive Drag to Pan & Wheel to Zoom
+    canvas.addEventListener('pointerdown', (e) => {
+      state.isDragging = true;
+      state.lastMouseX = e.clientX;
+      state.lastMouseY = e.clientY;
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!state.isDragging) return;
+      const dx = e.clientX - state.lastMouseX;
+      const dy = e.clientY - state.lastMouseY;
+      state.panX += dx;
+      state.panY += dy;
+      state.lastMouseX = e.clientX;
+      state.lastMouseY = e.clientY;
+      if (!state.isAnimating) render();
+    });
+
+    window.addEventListener('pointerup', () => state.isDragging = false);
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      state.zoom = Math.min(Math.max(state.zoom * zoomFactor, 0.1), 15);
+      if (!state.isAnimating) render();
+    }, { passive: false });
+
+    // UI Bindings & Sync
+    const bindControl = (id, stateKey, displayId, formatter = (v) => v) => {
+      const el = document.getElementById(id);
+      const disp = document.getElementById(displayId);
+      el.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        state[stateKey] = val;
+        if (disp) disp.textContent = formatter(val);
+        if (!state.isAnimating) render();
+      });
+    };
+
+    bindControl('paramPoints', 'points', 'valPoints');
+    bindControl('paramScale', 'scale', 'valScale');
+    bindControl('paramDivergence', 'divergence', 'valDivergence', (v) => v.toFixed(2) + '°');
+    bindControl('paramHarmonics', 'harmonics', 'valHarmonics');
+    bindControl('paramWidth', 'strokeWidth', 'valWidth', (v) => v.toFixed(1) + 'px');
+
+    document.getElementById('selModel').addEventListener('change', (e) => {
+      state.model = e.target.value;
+      if (!state.isAnimating) render();
+    });
+
+    // Color Palette Selector
+    const paletteGrid = document.getElementById('paletteGrid');
+    Object.keys(palettes).forEach(key => {
+      const p = palettes[key];
+      const btn = document.createElement('div');
+      btn.className = `palette-btn ${key === state.palette ? 'active' : ''}`;
+      btn.style.background = `linear-gradient(135deg, ${p.slice(0, 3).join(', ')})`;
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.palette = key;
+        if (!state.isAnimating) render();
+      });
+      paletteGrid.appendChild(btn);
+    });
+
+    // Play/Pause Animation
+    const btnAnimate = document.getElementById('btnAnimate');
+    const animIcon = document.getElementById('animIcon');
+    const animLabel = document.getElementById('animLabel');
+
+    btnAnimate.addEventListener('click', () => {
+      state.isAnimating = !state.isAnimating;
+      animIcon.textContent = state.isAnimating ? '⏸' : '▶';
+      animLabel.textContent = state.isAnimating ? 'Pause' : 'Animate';
+    });
+
+    // Randomize Parameters
+    document.getElementById('btnRandomize').addEventListener('click', () => {
+      const models = ['archimedean', 'logarithmic', 'fermat', 'spirograph', 'maurer', 'clothoid'];
+      state.model = models[Math.floor(Math.random() * models.length)];
+      state.points = Math.floor(1000 + Math.random() * 3000);
+      state.scale = +(1 + Math.random() * 4).toFixed(1);
+      state.divergence = +(10 + Math.random() * 200).toFixed(2);
+      state.harmonics = Math.floor(1 + Math.random() * 10);
+      state.strokeWidth = +(0.8 + Math.random() * 2).toFixed(1);
+
+      const palKeys = Object.keys(palettes);
+      state.palette = palKeys[Math.floor(Math.random() * palKeys.length)];
+
+      // Sync form elements
+      document.getElementById('selModel').value = state.model;
+      document.getElementById('paramPoints').value = state.points;
+      document.getElementById('valPoints').textContent = state.points;
+      document.getElementById('paramScale').value = state.scale;
+      document.getElementById('valScale').textContent = state.scale;
+      document.getElementById('paramDivergence').value = state.divergence;
+      document.getElementById('valDivergence').textContent = state.divergence + '°';
+      document.getElementById('paramHarmonics').value = state.harmonics;
+      document.getElementById('valHarmonics').textContent = state.harmonics;
+      document.getElementById('paramWidth').value = state.strokeWidth;
+      document.getElementById('valWidth').textContent = state.strokeWidth + 'px';
+
+      document.querySelectorAll('.palette-btn').forEach((b, i) => {
+        b.classList.toggle('active', palKeys[i] === state.palette);
+      });
+
+      render();
+    });
+
+    // Nautilus Preset
+    document.getElementById('btnPresetNautilus').addEventListener('click', () => {
+      state.model = 'logarithmic';
+      state.points = 1800;
+      state.scale = 2.4;
+      state.strokeWidth = 1.6;
+      state.palette = 'iridescent';
+      state.harmonics = 1;
+      document.getElementById('selModel').value = 'logarithmic';
+      render();
+    });
+
+    document.getElementById('btnResetCamera').addEventListener('click', resetCamera);
+
+    // Collapsible Panel
+    const studioPanel = document.getElementById('studioPanel');
+    const btnTogglePanel = document.getElementById('btnTogglePanel');
+    const btnClosePanel = document.getElementById('btnClosePanel');
+
+    btnClosePanel.addEventListener('click', () => studioPanel.classList.add('collapsed'));
+    btnTogglePanel.addEventListener('click', () => studioPanel.classList.toggle('collapsed'));
+
+    // High-Resolution 4K Export (.PNG)
+    document.getElementById('btnExportPNG').addEventListener('click', () => {
+      const exportCanvas = document.createElement('canvas');
+      const exportCtx = exportCanvas.getContext('2d');
+      const size = 3840; // 4K UHD Square
+      exportCanvas.width = size;
+      exportCanvas.height = size;
+
+      exportCtx.fillStyle = '#07080d';
+      exportCtx.fillRect(0, 0, size, size);
+      exportCtx.translate(size / 2, size / 2);
+      exportCtx.scale(size / 900, size / 900);
+
+      const pts = calculatePoints(state.points * 1.5, state.time);
+      exportCtx.beginPath();
+      exportCtx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) exportCtx.lineTo(pts[i].x, pts[i].y);
+
+      const grad = exportCtx.createLinearGradient(-300, -300, 300, 300);
+      palettes[state.palette].forEach((c, idx, arr) => grad.addColorStop(idx / (arr.length - 1), c));
+      exportCtx.strokeStyle = grad;
+      exportCtx.lineWidth = state.strokeWidth * 1.2;
+      exportCtx.stroke();
+
+      const link = document.createElement('a');
+      link.download = `spiral-${state.model}-${Date.now()}.png`;
+      link.href = exportCanvas.toDataURL('image/png', 1.0);
+      link.click();
+    });
+
+    // Vector (.SVG) Export
+    document.getElementById('btnExportSVG').addEventListener('click', () => {
+      const pts = calculatePoints(state.points, state.time);
+      const strokeColor = palettes[state.palette][0];
+      let pathData = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`;
+      for (let i = 1; i < pts.length; i++) {
+        pathData += ` L ${pts[i].x.toFixed(2)} ${pts[i].y.toFixed(2)}`;
+      }
+
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-500 -500 1000 1000" width="1000" height="1000">
+  <rect x="-500" y="-500" width="1000" height="1000" fill="#07080d"/>
+  <path d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="${state.strokeWidth}" stroke-linecap="round"/>
+</svg>`;
+
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `spiral-${state.model}.svg`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
 </body>
 </html>
-
